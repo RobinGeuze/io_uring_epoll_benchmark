@@ -1,5 +1,7 @@
 /* Minimal io_uring/pipe benchmark for small messages */
 
+#define _GNU_SOURCE
+
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -7,90 +9,173 @@
 #include <unistd.h>
 #include "liburing.h"
 
-int writefd, readfd;
+#include <stdlib.h>
+
+//int writefd, readfd;
+
+    // vektor av read,write ints
+    int pipes[100];
 
     /* Some shared static data */
     char buf[16] = {};
 
+    int num_pipes = 0;
+
+        struct iovec buffers[64];
+
+        #include <errno.h>
+        #include <string.h>
+
 void io_uring_minimal_nop_loop(struct io_uring *ring) {
 
     struct io_uring_sqe *sqe;
-    struct io_uring_cqe *cqes[16];
+    struct io_uring_cqe *cqes[100];
     //struct io_uring_cqe *cqe;
 
     for (int i = 0; i < 1000000; i++) {
-        //sqe = io_uring_get_sqe(ring);
-        //io_uring_prep_nop(sqe);
 
-        /* Prepare a write */
-        sqe = io_uring_get_sqe(ring);
-        io_uring_prep_write(sqe, writefd, "HELLU!", 6, 0);
+        for (int j = 0; j < num_pipes; j++) {
 
-        /* Prepare a read */
-        sqe = io_uring_get_sqe(ring);
-        io_uring_prep_read(sqe, readfd, buf, 6, 0);
+            int readfd = pipes[j * 2];
+            int writefd = pipes[j * 2 + 1];
 
-        io_uring_submit(ring);
+            
 
-        // io_uring_wait_cqe(ring, &cqe); -- very slow!
+            /* Prepare a write */
+            sqe = io_uring_get_sqe(ring);
+            //io_uring_prep_write(sqe, writefd, "HELLU!", 6, 0);
+            io_uring_prep_write_fixed(sqe, writefd, buffers[j * 2 + 1].iov_base, 6, 0, j * 2 + 1);
+
+            /* Prepare a read */
+            sqe = io_uring_get_sqe(ring);
+            io_uring_prep_read_fixed(sqe, readfd, buffers[j * 2].iov_base, 6, 0, j * 2);
+            //io_uring_prep_read(sqe, readfd, buf, 6, 0);
+        }
+
+
+
+
+        // this one is the io_uring_enter syscall
+        //io_uring_submit(ring);
+        int submitted = /*2 * num_pipes;*/ io_uring_submit_and_wait(ring, 2 * num_pipes);
+
+        // mark completions as "seen"
+        for (int j = 0; j < submitted; j++) {
+            struct io_uring_cqe *cqe;
+            int ret;
+            again:
+            ret = io_uring_peek_cqe(ring, &cqe);
+
+            if (ret != 0) {
+                goto again;
+            }
+
+            if (ret != 0 || cqe->res < 0) {
+                printf("ASYNC FAILURE!\n");
+                exit(0);
+            }
+
+            //printf("ret: %d\n", ret);
+
+            //printf("%s\n", strerror(-cqe->res));
+
+            io_uring_cqe_seen(ring, cqe);
+        }
+
+        //printf("%s\n", buf);
+
+        continue;
+
+
+        //io_uring_submit(ring);
+
+        io_uring_submit_and_wait(ring, 1);
+
+        //io_uring_wait_cqe(ring, &cqe); -- very slow!
 
         /* Poll for completions */
-        while (2 != io_uring_peek_batch_cqe(ring, cqes, 16));
-        io_uring_cqe_seen(ring, cqes[0]);
-        io_uring_cqe_seen(ring, cqes[1]);
-    }
+        int remaining_completions = num_pipes /** 2*/;
 
-    printf("%s\n", buf);
+        while (remaining_completions) {
+            int completions = io_uring_peek_batch_cqe(ring, cqes, 100);
+
+            if (completions < 0) {
+                printf("not done yet!\n");
+                continue;
+            }
+
+            for (int j = 0; j < completions; j++) {
+
+                printf("%s\n", strerror(-cqes[j]->res));
+
+                printf("ERRNO completion: %d\n", cqes[j]->res);
+
+                io_uring_cqe_seen(ring, cqes[j]);
+            }
+
+            remaining_completions -= completions;
+        }
+    }
 }
 
-int main() {
+#include <time.h>
 
-    /* Create a pipe with two fds (read, write) */
-    int fds[2];
-    int p = pipe(fds);
-    /*int */readfd = fds[0];
-    /*int */writefd = fds[1];
+#include <stdlib.h>
+#include <string.h>
+
+//#include <linux/io_uring.h>
+
+int main(int argc, char **argv) {
+
+    //num_pipes = 0;
+    sscanf(argv[1], "%d", &num_pipes);
+
+    printf("Pipes: %d\n", num_pipes);
+    for (int i = 0; i < num_pipes; i++) {
+        if (pipe2(&pipes[i * 2], O_NONBLOCK | O_CLOEXEC)) {
+            printf("ERROR! pipes!\n");
+        }
+    }
 
     /* Create an io_uring */
     struct io_uring ring;
-    int r = io_uring_queue_init(64, &ring, IORING_SETUP_SQPOLL | IORING_SETUP_SQ_AFF /*0*/); //without this, we get 2 seconds and io_uring_enter syscalls, with we get 0.81 sec
+    int r = io_uring_queue_init(64, &ring, /*IORING_FEAT_SUBMIT_STABLE | IORING_SETUP_SQPOLL | IORING_SETUP_SQ_AFF*/ /*IORING_SETUP_IOPOLL*/ 0 /*0*/); //without this, we get 2 seconds and io_uring_enter syscalls, with we get 0.81 sec
 
-    printf("io_uring_queue_init: %d\n", r);
+    if (r) {
+        printf("ERROR!\n");
+        return 0;
+    }
 
+    #define BUF_SIZE 1024
+
+
+    for (int i = 0; i < 64; i++) {
+        buffers[i].iov_base = malloc(BUF_SIZE);
+        buffers[i].iov_len = BUF_SIZE;
+
+        memset(buffers[i].iov_base, 'R', BUF_SIZE);
+        if (i % 2) {
+            memset(buffers[i].iov_base, 'W', BUF_SIZE);
+        }
+       
+    }
+    //buffers[0].
+
+    int e = io_uring_register_buffers(&ring, buffers, 64);
+
+    printf("io_uring_register_buffers: %d\n", e);
+
+    clock_t start = clock();
 
     /* Start the most minimal NOP-loop possible */
     io_uring_minimal_nop_loop(&ring);
 
-    return 0;
+    clock_t end = clock();
 
+    double cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
 
-    /* Begin iterating, starting by writing, then writing and reading */
-    for (int i = 0; i < 1000000; i++) {
+    printf("Time: %f\n", cpu_time_used);
 
-        struct io_uring_sqe *sqe;
-        
-        /* It is actually enough with a NOP to trigger the slowdown */
-        io_uring_prep_nop(sqe);
-
-        /* Prepare a write */
-        //sqe = io_uring_get_sqe(&ring);
-        //io_uring_prep_write(sqe, writefd, "HELLU!", 6, 0);
-
-        /* Prepare a read */
-        //sqe = io_uring_get_sqe(&ring);
-        //io_uring_prep_read(sqe, readfd, buf, 6, 0);
-
-        io_uring_submit(&ring);
-
-        // this one is the io_uring_enter syscall
-        //int submitted = io_uring_submit_and_wait(&ring, 1);
-
-        // mark completions as "seen"
-        //for (int j = 0; j < submitted; j++) {
-            struct io_uring_cqe *cqe;
-            int ret = io_uring_wait_cqe(&ring, &cqe);
-
-            io_uring_cqe_seen(&ring, cqe);
-        //}
-    }
+        ((char *) buffers[0].iov_base)[6] = 0;
+    printf("%s\n", buffers[0].iov_base);
 }
