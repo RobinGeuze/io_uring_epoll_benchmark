@@ -29,16 +29,19 @@ int main() {
 
         struct io_uring_sqe *sqe;
         
+        /* It is actually enough with a NOP to trigger the slowdown */
+        io_uring_prep_nop(sqe);
+
         /* Prepare a write */
-        sqe = io_uring_get_sqe(&ring);
-        io_uring_prep_write(sqe, writefd, "HELLU!", 6, 0);
+        //sqe = io_uring_get_sqe(&ring);
+        //io_uring_prep_write(sqe, writefd, "HELLU!", 6, 0);
 
         /* Prepare a read */
-        sqe = io_uring_get_sqe(&ring);
-        io_uring_prep_read(sqe, readfd, buf, 6, 0);
+        //sqe = io_uring_get_sqe(&ring);
+        //io_uring_prep_read(sqe, readfd, buf, 6, 0);
 
         // this one is the io_uring_enter syscall
-        int submitted = io_uring_submit_and_wait(&ring, 2);
+        int submitted = io_uring_submit_and_wait(&ring, 1);
 
         // mark completions as "seen"
         for (int j = 0; j < submitted; j++) {
