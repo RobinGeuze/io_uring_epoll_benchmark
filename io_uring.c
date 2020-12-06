@@ -53,7 +53,7 @@ int main() {
 
     /* Create an io_uring */
     struct io_uring ring;
-    int r = io_uring_queue_init(64, &ring, IORING_SETUP_SQPOLL /*0*/);
+    int r = io_uring_queue_init(64, &ring, IORING_SETUP_SQPOLL | IORING_SETUP_SQ_AFF /*0*/); //without this, we get 2 seconds and io_uring_enter syscalls, with we get 0.81 sec
 
     printf("io_uring_queue_init: %d\n", r);
 
