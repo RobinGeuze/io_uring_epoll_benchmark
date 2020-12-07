@@ -2,7 +2,7 @@
 This is a scientific test, measuring the performance of epoll/io_uring when writing/reading small messages.
 Even though theory clearly points in one direction (such as io_uring **obviously** being faster than epoll because of eliminated syscalls and copies), practical benchmarks can be important reality checks.
 
-In order to eliminate as much noise as possible, pipes are used instead of sockets. By using pipes, we can eliminate the entire networking subsystem and all the variability it brings.
+In order to eliminate as much noise as possible, pipes are used instead of sockets. By using pipes, we can eliminate the entire networking subsystem and all the variability it brings. This allows us to get accurate and reproducible results regarding async write/read/poll performance to/from kernel without mixing in networking or filesystems (which are not part of what we are benchmarking).
 
 Similar tests have been run with actual TCP socktes earlier, and with similar conclusion, but this test is run with pipes as a more minimal and direct appraoch for comparison.
 
