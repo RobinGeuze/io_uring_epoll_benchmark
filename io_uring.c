@@ -11,6 +11,8 @@
 
 #include <stdlib.h>
 
+#define BUF_SIZE 1024
+
 //int writefd, readfd;
 
     // vektor av read,write ints
@@ -44,20 +46,27 @@ void io_uring_minimal_nop_loop(struct io_uring *ring) {
             /* Prepare a write */
             sqe = io_uring_get_sqe(ring);
             //io_uring_prep_write(sqe, writefd, "HELLU!", 6, 0);
-            io_uring_prep_write_fixed(sqe, writefd, buffers[j * 2 + 1].iov_base, 6, 0, j * 2 + 1);
+            io_uring_prep_write_fixed(sqe, /*writefd*/ j * 2 + 1, buffers[j * 2 + 1].iov_base, /*6*/ BUF_SIZE, 0, j * 2 + 1);
+
+
+
+            //io_uring_prep_write(sqe, 1, "HELLU!", /*BUF_SIZE*/6, 0);
+            sqe->flags |= IOSQE_FIXED_FILE;
 
             /* Prepare a read */
             sqe = io_uring_get_sqe(ring);
-            io_uring_prep_read_fixed(sqe, readfd, buffers[j * 2].iov_base, 6, 0, j * 2);
-            //io_uring_prep_read(sqe, readfd, buf, 6, 0);
+            io_uring_prep_read_fixed(sqe, /*readfd*/ j * 2, buffers[j * 2].iov_base, /*6 */ BUF_SIZE, 0, j * 2);
+            //io_uring_prep_read(sqe, 0, buf, 6, 0);
+             sqe->flags |= IOSQE_FIXED_FILE;
         }
 
 
-
+        io_uring_submit(ring);
+        int submitted = 2 * num_pipes;
 
         // this one is the io_uring_enter syscall
         //io_uring_submit(ring);
-        int submitted = /*2 * num_pipes;*/ io_uring_submit_and_wait(ring, 2 * num_pipes);
+        //int submitted = /*2 * num_pipes;*/ io_uring_submit_and_wait(ring, /*2 **/ num_pipes);
 
         // mark completions as "seen"
         for (int j = 0; j < submitted; j++) {
@@ -72,8 +81,17 @@ void io_uring_minimal_nop_loop(struct io_uring *ring) {
 
             if (ret != 0 || cqe->res < 0) {
                 printf("ASYNC FAILURE!\n");
+                printf("%s\n", strerror(-cqe->res));
                 exit(0);
             }
+
+            if (cqe->res != BUF_SIZE) {
+                printf("MISMATCHING READ: %d\n", cqe->res);
+                exit(0);
+            }
+
+            //printf("ok!\n");
+
 
             //printf("ret: %d\n", ret);
 
@@ -135,18 +153,34 @@ int main(int argc, char **argv) {
         if (pipe2(&pipes[i * 2], O_NONBLOCK | O_CLOEXEC)) {
             printf("ERROR! pipes!\n");
         }
+
+        //int readfd = pipes[i * 2];
+        //int writefd = pipes[i * 2 + 1];
+
+        //int size = BUF_SIZE;
+        //int ok = fcntl(readfd, F_SETPIPE_SZ, size);
+        //fcntl(writefd, F_SETPIPE_SZ, size);
+
+        //printf("ok: %d\n", ok);
     }
+
+
 
     /* Create an io_uring */
     struct io_uring ring;
-    int r = io_uring_queue_init(64, &ring, /*IORING_FEAT_SUBMIT_STABLE | IORING_SETUP_SQPOLL | IORING_SETUP_SQ_AFF*/ /*IORING_SETUP_IOPOLL*/ 0 /*0*/); //without this, we get 2 seconds and io_uring_enter syscalls, with we get 0.81 sec
+    int r = io_uring_queue_init(64, &ring, IORING_SETUP_SQPOLL/* | IORING_SETUP_SQ_AFF*/ /*IORING_SETUP_IOPOLL*/ /*0*/ /*0*/); //without this, we get 2 seconds and io_uring_enter syscalls, with we get 0.81 sec
 
     if (r) {
         printf("ERROR!\n");
         return 0;
     }
 
-    #define BUF_SIZE 1024
+        // needed for sqpoll!
+    int rr = io_uring_register_files(&ring, pipes, num_pipes * 2);
+
+    printf("rr: %d\n", rr);
+
+    //#define BUF_SIZE BUF_SIZE
 
 
     for (int i = 0; i < 64; i++) {
