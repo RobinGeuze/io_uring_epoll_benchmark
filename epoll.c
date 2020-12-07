@@ -10,6 +10,8 @@
 #include <unistd.h>
 #include <sys/epoll.h>
 
+#define MAX_PIPES 10000
+
 // a vector to keep track of the pipe? no, a struct attached to both ends
 struct pipe_data {
     size_t written;
@@ -19,7 +21,7 @@ struct pipe_data {
 
 #define BUF_SIZE 1024
 
-int pipes[1000];
+int *pipes;
 
 void register_pipe(int epfd, int index) {
     struct pipe_data *pd = malloc(sizeof(struct pipe_data));
@@ -59,6 +61,9 @@ void register_pipe(int epfd, int index) {
 #include <string.h>
 
 int main(int argc, char **argv) {
+
+    pipes = malloc(sizeof(int) * MAX_PIPES * 2);
+
     int num_pipes = 0;
     sscanf(argv[1], "%d", &num_pipes);
 
@@ -124,4 +129,9 @@ int main(int argc, char **argv) {
     double cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
 
     printf("Time: %f\n", cpu_time_used);
+
+    // append this run to epoll_runs
+    FILE *runs = fopen("epoll_runs", "a");
+    fprintf(runs, "%f\n", cpu_time_used);
+    fclose(runs);
 }

@@ -15,11 +15,12 @@
 #include "liburing.h"
 
 #define BUF_SIZE 1024
-#define MAX_PIPES 1000
+#define MAX_PIPES 10000
 
 int *pipes;
 struct iovec *buffers;
 int num_pipes = 0;
+int num_buffers = 1;
 
 void io_uring_minimal_nop_loop(struct io_uring *ring) {
 
@@ -43,7 +44,7 @@ void io_uring_minimal_nop_loop(struct io_uring *ring) {
             }
 
             //io_uring_prep_write(sqe, writefd, "HELLU!", 6, 0);
-            io_uring_prep_write_fixed(sqe, /*writefd*/ j * 2 + 1, buffers[j * 2 + 1].iov_base, /*6*/ BUF_SIZE, 0, j * 2 + 1);
+            io_uring_prep_write_fixed(sqe, /*writefd*/ j * 2 + 1, buffers[/*j * 2 + 1*/0].iov_base + BUF_SIZE * j * 2 + 1, /*6*/ BUF_SIZE, 0, /*j * 2 + 1*/ 0);
 
 
 
@@ -52,7 +53,7 @@ void io_uring_minimal_nop_loop(struct io_uring *ring) {
 
             /* Prepare a read */
             sqe = io_uring_get_sqe(ring);
-            io_uring_prep_read_fixed(sqe, /*readfd*/ j * 2, buffers[j * 2].iov_base, /*6 */ BUF_SIZE, 0, j * 2);
+            io_uring_prep_read_fixed(sqe, /*readfd*/ j * 2, /*buffers[j * 2].iov_base*/ buffers[0].iov_base + BUF_SIZE * j * 2, /*6 */ BUF_SIZE, 0, /*j * 2*/ 0);
             //io_uring_prep_read(sqe, 0, buf, 6, 0);
              sqe->flags |= IOSQE_FIXED_FILE;
         }
@@ -202,7 +203,7 @@ int main(int argc, char **argv) {
 
     /* Create an io_uring */
     struct io_uring ring;
-    int r = io_uring_queue_init(2000, &ring, IORING_SETUP_SQPOLL | IORING_SETUP_SQ_AFF /*IORING_SETUP_IOPOLL*/ /*0*/ /*0*/); //without this, we get 2 seconds and io_uring_enter syscalls, with we get 0.81 sec
+    int r = io_uring_queue_init(5000, &ring, IORING_SETUP_SQPOLL | IORING_SETUP_SQ_AFF /*IORING_SETUP_IOPOLL*/ /*0*/ /*0*/); //without this, we get 2 seconds and io_uring_enter syscalls, with we get 0.81 sec
 
     if (r) {
         printf("ERROR!\n");
@@ -216,7 +217,7 @@ int main(int argc, char **argv) {
 
     //#define BUF_SIZE BUF_SIZE
 
-
+/*
     for (int i = 0; i < num_pipes * 2; i++) {
         buffers[i].iov_base = malloc(BUF_SIZE);
         buffers[i].iov_len = BUF_SIZE;
@@ -226,10 +227,20 @@ int main(int argc, char **argv) {
             memset(buffers[i].iov_base, 'W', BUF_SIZE);
         }
        
+    }*/
+    for (int i = 0; i < 1; i++) {
+        buffers[i].iov_base = malloc(BUF_SIZE * 2 * 10000);
+        buffers[i].iov_len = BUF_SIZE * 2 * 10000;
+
+        memset(buffers[i].iov_base, 'R', BUF_SIZE * 2 * 10000);
+        if (i % 2) {
+            memset(buffers[i].iov_base, 'W', BUF_SIZE * 2 * 10000);
+        }
+       
     }
     //buffers[0].
 
-    int e = io_uring_register_buffers(&ring, buffers, num_pipes * 2);
+    int e = io_uring_register_buffers(&ring, buffers, /*num_pipes * 2*/ 1);
 
     printf("io_uring_register_buffers: %d\n", e);
 
@@ -244,6 +255,10 @@ int main(int argc, char **argv) {
 
     printf("Time: %f\n", cpu_time_used);
 
-        ((char *) buffers[0].iov_base)[6] = 0;
-    printf("%s\n", buffers[0].iov_base);
+        FILE *runs = fopen("io_uring_runs", "a");
+    fprintf(runs, "%f\n", cpu_time_used);
+    fclose(runs);
+
+        /*((char *) buffers[0].iov_base)[6] = 0;
+    printf("%s\n", buffers[0].iov_base);*/
 }
