@@ -8,7 +8,7 @@ Similar tests have been run with actual TCP socktes earlier, and with similar co
 
 ## The test
 A varying amount of non-blocking pipes are used in writing/reading/polling messages of 1KB. The numbers are for currently active pipes, not concurrent-but-idle pipes.
-As such, the maximum load plotted should be comparable to multiple thousands of concurrent connections.
+As such, the maximum load plotted should be comparable to multiple thousands of concurrent connections, if not millions (of course dependent on use case).
 
 <img src="Time%20elapsed%20for%2010k%20write_read%20of%201KB%20data%20(lower%20is%20better%2C%20Linux%205.9.9).png" />
 
