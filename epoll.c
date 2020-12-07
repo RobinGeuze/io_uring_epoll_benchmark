@@ -77,7 +77,7 @@ int main(int argc, char **argv) {
     clock_t start = clock();
 
     /* Begin iterating, starting by writing, then writing and reading */
-    for (int i = 0; i < 1000000; i++) {
+    for (int i = 0; i < 10000/*00*/; i++) {
 
         /* First we write a message to all pipes */
         for (int j = 0; j < num_pipes; j++) {
