@@ -27,3 +27,5 @@ I'm sure Facebook can show certain cases where io_uring outpeforms epoll, but in
 I have tested on two separate native machines with two entirely different Linux kernels installed, and still got the same general outcome.
 
 Mob mentality and hype always leads you to people **claiming** this or that, but actual real benchmarks that can show this incredible gain of io_uring have still to make it to me. And believe me - I would love to get my hands on something that could improve performance for my and my customers use cases.
+
+When I have shown that io_uring is slower for 400 connections, people have said that io_uring will surpass epoll on higher amounts of connections - but the graph above clearly points in the opposite direction - that in fact epoll continues to diverge from io_uring with increaing number of file descriptors involved - to the better of epoll.
