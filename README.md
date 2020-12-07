@@ -1,6 +1,6 @@
 # IO_uring, epoll benchmark
 This is a scientific test, measuring the performance of epoll/io_uring when writing/reading small messages.
-Even though theory clearly points in one direction (such as io_uring clearly being faster than epoll because of eliminated syscalls), practical benchmarks can be important reality checks.
+Even though theory clearly points in one direction (such as io_uring **obviously** being faster than epoll because of eliminated syscalls and copies), practical benchmarks can be important reality checks.
 
 In order to eliminate as much noise as possible, pipes are used instead of sockets. By using pipes, we can eliminate the entire networking subsystem and all the variability it brings.
 
