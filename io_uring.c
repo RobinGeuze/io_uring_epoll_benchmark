@@ -124,7 +124,7 @@ int main(int argc, char **argv) {
                 }
             }
             
-            /* Does the same as io_uring_cqe_seen (that literally does io_uring_cq_advance(&ring, 1)), except all at one */
+            /* Does the same as io_uring_cqe_seen (that literally does io_uring_cq_advance(&ring, 1)), except all at once */
             io_uring_cq_advance(&ring, completions);
 
             /* Update */
